@@ -1,8 +1,8 @@
 {
 	"schemaVersion": 1,
-	"id": "skyblock-patch-notes",
+	"id": "skyblockpatchnotes",
 	"version": "${version}",
-	"name": "Skyblock Patch Notes",
+	"name": "Skyblock Patch Notes Mod",
 	"description": "This is an example description! Tell everyone what your mod is about!",
 	"authors": [
 		"Me!"
@@ -13,24 +13,18 @@
 	},
 	"license": "CC0-1.0",
 	"icon": "assets/skyblock-patch-notes/icon.png",
-	"environment": "*",
+	"environment": "client",
 	"entrypoints": {
-		"main": [
-			"net.seb.skyblockpatchnotes.SkyblockPatchNotes"
-		],
-		"fabric-datagen": [
-			"net.seb.skyblockpatchnotes.SkyblockPatchNotesDataGenerator"
-		],
 		"client": [
-			"net.seb.skyblockpatchnotes.SkyblockPatchNotesClient"
+			"net.seb.skyblockpatchnotes.SkyblockPatchNotesMod"
 		]
 	},
 	"mixins": [
 		"skyblock-patch-notes.mixins.json"
 	],
 	"depends": {
-		"fabricloader": ">=0.17.3",
-		"minecraft": "~1.21.5",
+		"fabricloader": ">=0.15.11",
+		"minecraft": "~1.21",
 		"java": ">=21",
 		"fabric-api": "*"
 	},

@@ -2,13 +2,11 @@
 	"required": true,
 	"package": "net.seb.skyblockpatchnotes.mixin",
 	"compatibilityLevel": "JAVA_21",
-	"mixins": [
+	"mixins": [],
+	"client": [
 		"ExampleMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1
-	},
-	"overwrites": {
-		"requireAnnotations": true
 	}
 }
