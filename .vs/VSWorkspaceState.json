@@ -1,6 +1,14 @@
 {
   "ExpandedNodes": [
-    ""
+    "",
+    "\\src",
+    "\\src\\main",
+    "\\src\\main\\java",
+    "\\src\\main\\java\\net",
+    "\\src\\main\\java\\net\\seb",
+    "\\src\\main\\java\\net\\seb\\skyblockpatchnotes",
+    "\\src\\main\\java\\net\\seb\\skyblockpatchnotes\\gui"
   ],
+  "SelectedNode": "\\src\\main\\java\\net\\seb\\skyblockpatchnotes\\gui\\PatchNotesScreen.java",
   "PreviewInSolutionExplorer": false
 }

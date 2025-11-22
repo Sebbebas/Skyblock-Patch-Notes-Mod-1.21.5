@@ -18,27 +18,37 @@ public class HypixelPatchNotesFetcher {
     private static final String HYPIXEL_FORUMS = "https://hypixel.net/forums/";
     private static final String NEWS_SECTION = "News and Announcements";
 
+    // Container for patch notes data
+    public static class PatchNotesData {
+        public String title;
+        public String url;
+        public String imageUrl;
+        public List<String> content;
+
+        public PatchNotesData() {
+            this.content = new ArrayList<>();
+        }
+    }
+
     /**
      * Fetches patch notes asynchronously to avoid blocking the game thread
-     * @return CompletableFuture containing the patch notes as a list of strings
      */
-    public static CompletableFuture<List<String>> fetchLatestPatchNotesAsync() {
+    public static CompletableFuture<PatchNotesData> fetchLatestPatchNotesAsync() {
         return CompletableFuture.supplyAsync(() -> {
             try {
                 return fetchLatestPatchNotes();
             } catch (Exception e) {
                 SkyblockPatchNotesMod.LOGGER.error("Failed to fetch patch notes", e);
-                return getErrorMessage();
+                return getErrorData();
             }
         });
     }
 
     /**
      * Fetches the latest SkyBlock patch notes from Hypixel forums
-     * @return List of formatted patch note lines
      */
-    private static List<String> fetchLatestPatchNotes() throws IOException {
-        List<String> patchNotes = new ArrayList<>();
+    private static PatchNotesData fetchLatestPatchNotes() throws IOException {
+        PatchNotesData data = new PatchNotesData();
 
         SkyblockPatchNotesMod.LOGGER.info("Fetching Hypixel forums homepage...");
 
@@ -68,6 +78,7 @@ public class HypixelPatchNotesFetcher {
             throw new IOException("Could not find latest SkyBlock update");
         }
 
+        data.url = updateUrl;
         SkyblockPatchNotesMod.LOGGER.info("Found latest update: {}", updateUrl);
 
         // Step 5: Fetch the update thread and parse it
@@ -76,9 +87,9 @@ public class HypixelPatchNotesFetcher {
                 .timeout(10000)
                 .get();
 
-        patchNotes = parseUpdateThread(updatePage, updateUrl);
+        parseUpdateThread(updatePage, data);
 
-        return patchNotes;
+        return data;
     }
 
     /**
@@ -134,29 +145,33 @@ public class HypixelPatchNotesFetcher {
     /**
      * Parses the update thread and extracts formatted patch notes
      */
-    private static List<String> parseUpdateThread(Document updatePage, String url) {
-        List<String> notes = new ArrayList<>();
-
+    private static void parseUpdateThread(Document updatePage, PatchNotesData data) {
         // Get the thread title
         Element titleElement = updatePage.selectFirst(".p-title-value");
-        String title = titleElement != null ? titleElement.text() : "Hypixel SkyBlock Update";
-
-        notes.add("§6§l" + title);
-        notes.add("");
-        notes.add("§7Source: §9§n" + url);
-        notes.add("");
+        data.title = titleElement != null ? titleElement.text() : "Hypixel SkyBlock Update";
 
         // Get the first post content (the announcement)
         Element firstPost = updatePage.selectFirst(".message-body .bbWrapper");
 
         if (firstPost != null) {
-            // Parse the content - convert BB code and HTML to Minecraft formatting
-            parseContent(firstPost, notes);
-        } else {
-            notes.add("§cCould not parse patch notes content");
-        }
+            // Try to find the header image (usually the first large image)
+            Element headerImage = firstPost.selectFirst("img");
+            if (headerImage != null) {
+                String imgSrc = headerImage.attr("src");
+                // Make sure it's a full URL
+                if (imgSrc.startsWith("//")) {
+                    imgSrc = "https:" + imgSrc;
+                } else if (imgSrc.startsWith("/")) {
+                    imgSrc = "https://hypixel.net" + imgSrc;
+                }
+                data.imageUrl = imgSrc;
+            }
 
-        return notes;
+            // Parse the content - convert BB code and HTML to Minecraft formatting
+            parseContent(firstPost, data.content);
+        } else {
+            data.content.add("§cCould not parse patch notes content");
+        }
     }
 
     /**
@@ -166,45 +181,96 @@ public class HypixelPatchNotesFetcher {
         // Process each element
         for (Element element : content.children()) {
             String tagName = element.tagName();
-            String text = element.text().trim();
+            // DO NOT extract text here; extract it after images are removed.
 
-            if (text.isEmpty()) continue;
+            // Check for images first
+            if (tagName.equals("img")) {
+                String imgSrc = element.attr("src");
+                if (imgSrc.startsWith("//")) {
+                    imgSrc = "https:" + imgSrc;
+                } else if (imgSrc.startsWith("/")) {
+                    imgSrc = "https://hypixel.net" + imgSrc;
+                }
+                notes.add("<img src=\"" + imgSrc + "\">");
+                notes.add("");
+                continue;
+            }
+
+            // --- Begin processing element content ---
 
             switch (tagName) {
-                case "h1", "h2", "h3":
+                case "h1":
+                case "h2":
+                case "h3":
                     // Headers in gold and bold
                     notes.add("");
-                    notes.add("§6§l" + text);
+                    notes.add("§6§l" + element.text().trim());
                     notes.add("");
                     break;
 
-                case "b", "strong":
+                case "b":
+                case "strong":
                     // Bold text
-                    notes.add("§l" + text);
+                    notes.add("§l" + element.text().trim());
                     break;
 
-                case "ul", "ol":
+                case "ul":
+                case "ol":
                     // Lists
                     Elements listItems = element.select("li");
                     for (Element li : listItems) {
-                        notes.add("§7  • " + li.text());
+                        notes.add("§7  • " + li.text().trim());
                     }
                     notes.add("");
                     break;
 
                 case "p":
-                    // Paragraphs - split long lines
-                    String[] lines = wrapText(text, 80);
-                    for (String line : lines) {
-                        notes.add("§7" + line);
+                    // Check for images inside paragraphs
+                    Elements images = element.select("img");
+                    for (Element img : images) {
+                        String imgSrc = img.attr("src");
+                        if (imgSrc.startsWith("//")) {
+                            imgSrc = "https:" + imgSrc;
+                        } else if (imgSrc.startsWith("/")) {
+                            imgSrc = "https://hypixel.net" + imgSrc;
+                        }
+                        notes.add("<img src=\"" + imgSrc + "\">");
+                        notes.add("");
+                        // CRITICAL FIX: Remove the image to prevent its content being included in element.text()
+                        img.remove();
                     }
-                    notes.add("");
+
+                    String remainingParagraphText = element.text().trim();
+                    // Paragraphs - split long lines
+                    if (!remainingParagraphText.isEmpty()) {
+                        String[] lines = wrapText(remainingParagraphText, 80);
+                        for (String line : lines) {
+                            notes.add("§7" + line);
+                        }
+                        notes.add("");
+                    }
                     break;
 
                 default:
-                    // Default: just add the text
-                    if (!text.isEmpty()) {
-                        notes.add("§7" + text);
+                    // Check for images in any element
+                    Elements imgs = element.select("img");
+                    for (Element img : imgs) {
+                        String imgSrc = img.attr("src");
+                        if (imgSrc.startsWith("//")) {
+                            imgSrc = "https:" + imgSrc;
+                        } else if (imgSrc.startsWith("/")) {
+                            imgSrc = "https://hypixel.net" + imgSrc;
+                        }
+                        notes.add("<img src=\"" + imgSrc + "\">");
+                        notes.add("");
+                        // CRITICAL FIX: Remove the image
+                        img.remove();
+                    }
+
+                    // Default: just add the remaining text
+                    String remainingDefaultText = element.text().trim();
+                    if (!remainingDefaultText.isEmpty()) {
+                        notes.add("§7" + remainingDefaultText);
                     }
                     break;
             }
@@ -242,15 +308,17 @@ public class HypixelPatchNotesFetcher {
     /**
      * Returns an error message if fetching fails
      */
-    private static List<String> getErrorMessage() {
-        List<String> error = new ArrayList<>();
-        error.add("§c§lError Loading Patch Notes");
-        error.add("");
-        error.add("§7Could not fetch patch notes from Hypixel forums.");
-        error.add("§7Please check your internet connection and try again.");
-        error.add("");
-        error.add("§7You can view patch notes directly at:");
-        error.add("§9§nhttps://hypixel.net/forums/");
-        return error;
+    private static PatchNotesData getErrorData() {
+        PatchNotesData data = new PatchNotesData();
+        data.title = "Error Loading Patch Notes";
+        data.url = "https://hypixel.net/forums/";
+        data.content.add("§c§lError Loading Patch Notes");
+        data.content.add("");
+        data.content.add("§7Could not fetch patch notes from Hypixel forums.");
+        data.content.add("§7Please check your internet connection and try again.");
+        data.content.add("");
+        data.content.add("§7You can view patch notes directly at:");
+        data.content.add("§9§nhttps://hypixel.net/forums/");
+        return data;
     }
 }
